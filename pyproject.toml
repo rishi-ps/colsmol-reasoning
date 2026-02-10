@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "colsmol-reasoning"
+version = "0.1.0"
+description = "Visual document retrieval with distillation and reasoning-enhanced retrieval"
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    "torch>=2.0",
+    "transformers>=4.40",
+    "colpali-engine>=0.3",
+    "datasets>=2.18",
+    "peft>=0.10",
+    "pyyaml>=6.0",
+    "Pillow>=10.0",
+]
+
+[project.optional-dependencies]
+eval = [
+    "mteb>=1.12",
+    "matplotlib>=3.8",
+    "pandas>=2.0",
+]
+dev = [
+    "jupyter>=1.0",
+    "ipykernel>=6.29",
+    "ruff>=0.4",
+]
+
+[tool.setuptools.packages.find]
+include = ["src*"]

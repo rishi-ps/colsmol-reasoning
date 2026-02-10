@@ -23,3 +23,15 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Training outputs
+checkpoints/
+wandb/
+outputs/
+
+# Data (large files)
+data/traces/
+data/cache/
+
+# HuggingFace cache
+.cache/

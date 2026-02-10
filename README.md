@@ -1,0 +1,73 @@
+# ColSmol-Reasoning
+
+Research project for improving small visual document retrievers through **knowledge distillation** and **reasoning-enhanced retrieval**.
+
+> **BS Thesis** — Investigating how to bridge the performance gap between small (256M) and large (2-3B) visual document retrievers.
+
+## Research Directions
+
+1. **Visual Token Distillation (MID)** — Distill MaxSim interaction patterns from ColPali/ColQwen (teacher) into ColSmol (student)
+2. **Reason-to-Retrieve (R2R)** — Augment queries with chain-of-thought reasoning traces for better query-document matching
+
+See [docs/publishable_research_directions.md](docs/publishable_research_directions.md) for full details.
+
+## Project Structure
+
+```
+colsmol-reasoning/
+├── src/                    # Core source code
+│   ├── models/             # ColSmol & teacher model wrappers
+│   ├── data/               # ViDoRe dataset loading
+│   ├── distillation/       # Idea 1: MID losses + trainer
+│   └── reasoning/          # Idea 2: trace generator + augmented retriever
+├── scripts/                # Runnable experiment scripts
+├── configs/                # YAML experiment configs
+├── evaluation/             # ViDoRe evaluation scripts
+├── results/                # Evaluation results & charts
+├── notebooks/              # Exploration notebooks
+└── docs/                   # Research docs
+```
+
+## Setup
+
+```bash
+# Clone and setup
+git clone https://github.com/rishi-ps/colsmol-reasoning.git
+cd colsmol-reasoning
+python -m venv venv
+source venv/bin/activate
+pip install -e .
+```
+
+## Quick Start
+
+### Generate Reasoning Traces (R2R Phase 1)
+
+```bash
+python scripts/generate_traces.py --config configs/r2r/base.yaml --limit 100
+```
+
+### Train with Distillation (Idea 1)
+
+```bash
+python scripts/train_distillation.py --config configs/distillation/base.yaml
+```
+
+### Train with Reasoning Augmentation (Idea 2)
+
+```bash
+python scripts/train_r2r.py --config configs/r2r/base.yaml --traces data/traces/v1_traces.json
+```
+
+### Evaluate on ViDoRe
+
+```bash
+python evaluation/evaluate_vidore.py
+python evaluation/evaluate_vidore_v2.py
+```
+
+## GPU Requirements
+
+- **Training**: 8GB VRAM (LoRA fine-tuning)
+- **R2R inference**: ~6GB (0.5B reasoning LLM + 256M retriever)
+- **Teacher inference**: CPU offloaded (saves GPU for student)

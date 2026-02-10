@@ -1,0 +1,32 @@
+# ViDoRe Evaluation Config
+
+benchmarks:
+  v1:
+    datasets:
+      - "vidore/syntheticDocQA_artificial_intelligence_test"
+      - "vidore/syntheticDocQA_energy_test"
+      - "vidore/syntheticDocQA_government_reports_test"
+      - "vidore/syntheticDocQA_healthcare_industry_test"
+      - "vidore/docvqa_test_subsampled"
+      - "vidore/arxivqa_test_subsampled"
+      - "vidore/infographicsvqa_test_subsampled"
+      - "vidore/tabfquad_test_subsampled"
+      - "vidore/tatdqa_test"
+      - "vidore/shiftproject_test"
+
+  v2_english:
+    datasets:
+      - "vidore/Vidore2BioMedicalLecturesRetrieval"
+
+  v2_all:
+    datasets:
+      - "vidore/Vidore2BioMedicalLecturesRetrieval"
+      - "vidore/Vidore2ESGReportsHLRetrieval"
+      - "vidore/Vidore2ESGReportsRetrieval"
+      - "vidore/Vidore2EconomicsReportsRetrieval"
+
+evaluation:
+  batch_size: 4
+  similarity_device: "cpu" # CPU similarity to avoid OOM
+  chunk_size: 500
+  output_dir: "results"

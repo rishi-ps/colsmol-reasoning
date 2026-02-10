@@ -1,0 +1,31 @@
+# Reason-to-Retrieve (R2R) - Base Config
+# Idea 2: Chain-of-Thought Augmented Visual Document Retrieval
+
+reasoning_llm:
+  model_name: "Qwen/Qwen2.5-0.5B-Instruct"
+  device: "cuda"
+  max_new_tokens: 100
+  temperature: 0.7
+
+retriever:
+  model_name: "vidore/colSmol-256M"
+  use_lora: true
+  lora_rank: 16
+  lora_alpha: 32
+
+training:
+  learning_rate: 2.0e-5
+  batch_size: 2
+  gradient_accumulation_steps: 4
+  num_epochs: 3
+  warmup_steps: 100
+  separator: " [SEP] "
+
+data:
+  train_version: "v1"
+  eval_versions: ["v1", "v2", "v3"]
+  traces_dir: "data/traces"
+
+output:
+  checkpoint_dir: "checkpoints/r2r"
+  log_dir: "logs/r2r"
