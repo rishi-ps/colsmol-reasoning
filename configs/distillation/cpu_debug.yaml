@@ -1,0 +1,27 @@
+# CPU Debug Config for Distillation
+# Used to verify logic while GPU is busy
+
+teacher:
+  model_name: "vidore/colpali-v1.3"
+  device: "cpu"
+
+student:
+  model_name: "vidore/colSmol-256M"
+  use_lora: true
+  lora_rank: 8      # reduce rank for faster cpu test
+  lora_alpha: 16
+  device: "cpu"     # Force student to CPU
+
+training:
+  alpha: 1.0
+  beta: 1.0
+  gamma: 0.5
+  
+  learning_rate: 1.0e-4
+  batch_size: 2
+  gradient_accumulation_steps: 1
+  num_epochs: 1
+  warmup_steps: 0
+
+output:
+  checkpoint_dir: "checkpoints/distillation_debug"

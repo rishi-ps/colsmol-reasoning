@@ -38,15 +38,34 @@ class ColSmolWrapper:
         """Load the ColSmol model and processor."""
         # ColSmol-256M is based on Idefics3 (SmolVLM)
         from colpali_engine.models import ColIdefics3, ColIdefics3Processor
+        from peft import PeftModel
 
         self.processor = ColIdefics3Processor.from_pretrained(self.config.model_name)
+        # Load the model - if it's an adapter, from_pretrained will load base + adapter automatically
+        # provided the adapter_config is present (which it is for vidore/colSmol-256M)
         self.model = ColIdefics3.from_pretrained(
             self.config.model_name,
             torch_dtype=self.config.dtype,
         ).to(self.config.device)
 
+        # Check if it's already a PEFT model
+        is_peft = isinstance(self.model, PeftModel) or hasattr(self.model, "peft_config")
+
         if self.config.use_lora:
-            self._apply_lora()
+            if is_peft:
+                print(f"Model {self.config.model_name} is already a PEFT model. Skipping re-application of LoRA.")
+                # Ensure it's trainable if needed
+                self.model.train()
+                for name, param in self.model.named_parameters():
+                    if "lora" in name:
+                        param.requires_grad = True
+                
+                trainable = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+                total = sum(p.numel() for p in self.model.parameters())
+                print(f"Existing LoRA stats: {trainable:,} / {total:,} params trainable "
+                      f"({100 * trainable / total:.2f}%)")
+            else:
+                self._apply_lora()
 
         return self
 

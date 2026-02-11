@@ -23,6 +23,8 @@ def main():
     parser.add_argument("--output", type=str, default="data/traces/v1_traces.json")
     parser.add_argument("--version", type=str, default="v1", help="ViDoRe version")
     parser.add_argument("--limit", type=int, default=None, help="Limit number of queries")
+    parser.add_argument("--batch-size", type=int, default=32, help="Batch size for processing")
+    parser.add_argument("--save-every", type=int, default=100, help="Save every N queries")
     args = parser.parse_args()
 
     # Load config
@@ -35,6 +37,7 @@ def main():
         device=cfg["reasoning_llm"]["device"],
         max_new_tokens=cfg["reasoning_llm"]["max_new_tokens"],
         temperature=cfg["reasoning_llm"]["temperature"],
+        batch_size=args.batch_size # Use CLI batch size or config
     )
     generator = TraceGenerator(trace_cfg).load()
 
@@ -46,58 +49,92 @@ def main():
     
     if streaming:
         # Shuffle with fixed seed to ensure deterministic order across runs
-        # Note: streaming datasets require buffer_size for shuffling
         if isinstance(datasets, dict):
             for k in datasets:
                 datasets[k] = datasets[k].shuffle(seed=42, buffer_size=1000)
         else: # single dataset
             datasets = datasets.shuffle(seed=42, buffer_size=1000)
 
-    # Extract queries from all datasets
-    all_queries = []
-    if isinstance(datasets, dict):
-        for name, ds in datasets.items():
-            if streaming:
-                # For streaming, we iterate until limit
+    # Prepare for incremental processing
+    os.makedirs(os.path.dirname(args.output), exist_ok=True)
+    
+    # Load existing traces if file exists (to resume or append)
+    existing_data = []
+    if os.path.exists(args.output):
+        try:
+            with open(args.output, 'r') as f:
+                existing_data = json.load(f)
+            print(f"Loaded {len(existing_data)} existing traces from {args.output}")
+        except json.JSONDecodeError:
+            print(f"Warning: Could not decode {args.output}, starting fresh.")
+    
+    existing_queries = set(item["query"] for item in existing_data)
+    
+    # Generator for queries
+    def query_generator():
+        count = 0
+        if isinstance(datasets, dict):
+            for name, ds in datasets.items():
                 print(f"  Streaming queries from {name}...")
-                count = 0
                 for example in ds:
                     if "query" in example:
-                        all_queries.append(example["query"])
-                        count += 1
-                        if args.limit and len(all_queries) >= args.limit:
-                            break
-                if args.limit and len(all_queries) >= args.limit:
-                    break
-            else:
-                if "query" in ds.column_names:
-                    queries = ds["query"]
-                    all_queries.extend(queries)
-                    print(f"  {name}: {len(queries)} queries")
-    else:
-        # Single dataset case
-        ds = datasets
-        if streaming:
+                        q = example["query"]
+                        if q not in existing_queries:
+                            yield q
+                            count += 1
+                        if args.limit and (len(existing_data) + count) >= args.limit:
+                            return
+        else:
              print(f"  Streaming queries...")
+             ds = datasets
              for example in ds:
                 if "query" in example:
-                    all_queries.append(example["query"])
-                    if args.limit and len(all_queries) >= args.limit:
-                        break
-        elif "query" in ds.column_names:
-            all_queries = datasets["query"]
+                    q = example["query"]
+                    if q not in existing_queries:
+                        yield q
+                        count += 1
+                    if args.limit and (len(existing_data) + count) >= args.limit:
+                        return
 
-    if args.limit:
-        all_queries = all_queries[:args.limit]
+    # Process in batches
+    current_batch = []
+    new_data = []
+    total_processed = 0
+    
+    print(f"Starting generation...")
+    
+    for query in query_generator():
+        current_batch.append(query)
+        
+        if len(current_batch) >= args.batch_size:
+            # Generate traces for batch
+            traces = generator.generate_traces_batch(current_batch)
+            new_items = [{"query": q, "trace": t} for q, t in zip(current_batch, traces)]
+            new_data.extend(new_items)
+            existing_data.extend(new_items)
+            
+            total_processed += len(current_batch)
+            current_batch = []
+            
+            # Save incrementally
+            if len(new_data) >= args.save_every:
+                print(f"Saving {len(existing_data)} traces to {args.output}...")
+                with open(args.output, "w") as f:
+                    json.dump(existing_data, f, indent=2)
+                new_data = [] # Reset new data buffer (but we keep adding to existing_data for full dump)
 
-    print(f"\nGenerating traces for {len(all_queries)} queries...")
-    traces = generator.generate_traces_batch(all_queries)
+    # Process remaining
+    if current_batch:
+        traces = generator.generate_traces_batch(current_batch)
+        new_items = [{"query": q, "trace": t} for q, t in zip(current_batch, traces)]
+        existing_data.extend(new_items)
+        total_processed += len(current_batch)
 
-    # Save
-    os.makedirs(os.path.dirname(args.output), exist_ok=True)
-    generator.save_traces(all_queries, traces, args.output)
-    print(f"Done! Saved to {args.output}")
-
+    # Final save
+    print(f"Final save: {len(existing_data)} traces to {args.output}")
+    with open(args.output, "w") as f:
+        json.dump(existing_data, f, indent=2)
+    print("Done!")
 
 if __name__ == "__main__":
     main()

@@ -3,32 +3,26 @@
 
 teacher:
   model_name: "vidore/colpali-v1.3"
-  device: "cpu" # Keep teacher on CPU to save GPU for student
+  device: "cpu"  # Keep teacher on CPU to save VRAM
 
 student:
   model_name: "vidore/colSmol-256M"
   use_lora: true
-  lora_rank: 16
+  lora_rank: 32
   lora_alpha: 32
-  lora_target_modules: ["q_proj", "v_proj"]
+  device: "cuda"
 
 training:
-  alpha: 1.0 # L_contrastive weight
-  beta: 1.0 # L_interaction weight
-  gamma: 0.5 # L_ranking weight
-  temperature: 2.0 # KD temperature
+  # Loss weights
+  alpha: 1.0   # Contrastive
+  beta: 1.0    # Interaction (KL)
+  gamma: 0.5   # Ranking
+  
   learning_rate: 2.0e-5
   batch_size: 2
-  gradient_accumulation_steps: 4
-  num_epochs: 3
+  gradient_accumulation_steps: 8  # Effective batch size = 16
+  num_epochs: 1
   warmup_steps: 100
-  max_grad_norm: 1.0
-  save_every_n_steps: 500
-
-data:
-  train_version: "v1"
-  eval_versions: ["v1", "v2", "v3"]
 
 output:
   checkpoint_dir: "checkpoints/distillation"
-  log_dir: "logs/distillation"
