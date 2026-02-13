@@ -1,12 +1,12 @@
 """
 ViDoRe dataset loading utilities.
 
-Unified interface for loading ViDoRe v1, v2, and v3 benchmarks
-for both training and evaluation.
+Unified interface for loading ViDoRe v1/v2 benchmarks and training split.
 """
 
 from typing import Optional
-from datasets import load_dataset
+from datasets import DownloadConfig, load_dataset
+from src.utils import hf_offline_enabled
 
 
 # ViDoRe v1 benchmark datasets
@@ -51,7 +51,7 @@ def load_vidore_dataset(
     """Load ViDoRe benchmark dataset(s).
 
     Args:
-        version: One of 'v1', 'v2', 'v2_english', 'v3', 'train'
+        version: One of 'v1', 'v2', 'v2_english', 'train'
         subset: Specific dataset name to load (if None, returns all for version)
         split: Dataset split to use ('test' for benchmarks, 'train' for training set)
         streaming: Whether to stream the dataset (useful for large training sets)
@@ -78,11 +78,18 @@ def load_vidore_dataset(
         datasets_to_load = matching
 
     loaded = {}
+    local_only = hf_offline_enabled()
+    download_config = DownloadConfig(local_files_only=True) if local_only else None
     for dataset_name in datasets_to_load:
         short_name = dataset_name.split("/")[-1]
         print(f"Loading {short_name} (streaming={streaming})...")
         try:
-            loaded[short_name] = load_dataset(dataset_name, split=split, streaming=streaming)
+            loaded[short_name] = load_dataset(
+                dataset_name,
+                split=split,
+                streaming=streaming,
+                download_config=download_config,
+            )
         except Exception as e:
             print(f"  Warning: Failed to load {short_name}: {e}")
 

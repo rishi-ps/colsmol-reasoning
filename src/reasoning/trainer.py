@@ -9,8 +9,10 @@ import torch.nn.functional as F
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from typing import Optional, Dict, Any
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from tqdm import tqdm
+import csv
+import os
 
 from src.reasoning.augmented_retriever import ReasoningAugmentedRetriever
 
@@ -35,6 +37,7 @@ class R2RTrainerConfig:
 
     # Logging
     log_every_n_steps: int = 10
+    metrics_csv_path: Optional[str] = None
     use_wandb: bool = False
     wandb_project: str = "colsmol-r2r"
 
@@ -55,6 +58,7 @@ class R2RTrainer:
         self.config = config or R2RTrainerConfig()
         self.optimizer = None
         self.global_step = 0
+        self._metrics_initialized = False
 
     def setup(self):
         """Initialize optimizer."""
@@ -67,6 +71,8 @@ class R2RTrainer:
             lr=self.config.learning_rate,
             weight_decay=self.config.weight_decay,
         )
+        self.optimizer.zero_grad(set_to_none=True)
+        self._init_metrics_file()
         print(f"Optimizer initialized with {len(trainable_params)} parameter groups")
         return self
 
@@ -90,6 +96,11 @@ class R2RTrainer:
         
         # We need (B, B) scores matrix where score[i, j] is sim(q_i, d_j)
         B = query_embeddings.shape[0]
+        if B < 2:
+            raise ValueError(
+                "In-batch InfoNCE requires batch_size >= 2. "
+                "Increase training.batch_size or switch to cross-batch negatives."
+            )
         
         # Unfortunately, standard batch matrix multiplication doesn't work directly 
         # for (B, Tq, D) x (B, Td, D) -> (B, B) MaxSim
@@ -112,6 +123,10 @@ class R2RTrainer:
             scores[i] = max_sim_i
             
         labels = torch.arange(B, device=query_embeddings.device, dtype=torch.long)
+        # Cast to float32 to prevent overflow (exp(50) > 65504 which is max fp16)
+        scores = scores.to(torch.float32)
+        if torch.isnan(scores).any():
+            print(f"NaN in scores! Max score: {scores.max()}, Min score: {scores.min()}")
         return F.cross_entropy(scores / self.config.temperature, labels)
 
     def train_step(self, batch: Dict[str, Any]) -> Dict[str, float]:
@@ -148,20 +163,26 @@ class R2RTrainer:
         
         # Augment queries
         augmented_queries = self.retriever.augment_queries_batch(queries, traces)
-        
-        # Process queries
+        # Process queries with gradients
         q_inputs = processor.process_queries(augmented_queries).to(device)
         q_emb = model(**q_inputs) # (B, Tq, D)
         
-        # Process images
+        # Process images with gradients
         d_inputs = processor.process_images(images).to(device)
         d_emb = model(**d_inputs) # (B, Td, D)
         
+        # Normalize in float32 for numerical stability (fp16 eps underflow can create NaNs).
+        q_emb = F.normalize(q_emb.to(torch.float32), p=2, dim=-1, eps=1e-6)
+        d_emb = F.normalize(d_emb.to(torch.float32), p=2, dim=-1, eps=1e-6)
+        
+        if torch.isnan(q_emb).any() or torch.isnan(d_emb).any():
+            print(f"NaN in embeddings! Q: {torch.isnan(q_emb).any()}, D: {torch.isnan(d_emb).any()}")
+
         # Compute loss
         loss = self.compute_loss(q_emb, d_emb)
         
         # Backprop
-        loss.backward()
+        (loss / self.config.gradient_accumulation_steps).backward()
         
         # Optimizer step (with simple gradient accumulation handling)
         if (self.global_step + 1) % self.config.gradient_accumulation_steps == 0:
@@ -195,6 +216,7 @@ class R2RTrainer:
                 
                 # Update progress bar
                 pbar.set_postfix({"loss": f"{loss_val:.4f}"})
+                self._append_metric(epoch + 1, loss_val)
 
                 if self.global_step % self.config.log_every_n_steps == 0:
                     # Log (could add wandb here)
@@ -203,6 +225,12 @@ class R2RTrainer:
                 if self.global_step % self.config.save_every_n_steps == 0:
                     self._save_checkpoint()
 
+            if self.global_step % self.config.gradient_accumulation_steps != 0:
+                model = self.retriever.retriever.model
+                torch.nn.utils.clip_grad_norm_(model.parameters(), self.config.max_grad_norm)
+                self.optimizer.step()
+                self.optimizer.zero_grad(set_to_none=True)
+
             avg_loss = epoch_loss / max(num_steps, 1)
             print(f"Epoch {epoch + 1} average loss: {avg_loss:.4f}")
 
@@ -210,9 +238,26 @@ class R2RTrainer:
 
     def _save_checkpoint(self, final: bool = False):
         """Save model checkpoint."""
-        import os
         os.makedirs(self.config.output_dir, exist_ok=True)
         suffix = "final" if final else f"step_{self.global_step}"
         path = os.path.join(self.config.output_dir, suffix)
         self.retriever.retriever.model.save_pretrained(path)
         print(f"Checkpoint saved: {path}")
+
+    def _init_metrics_file(self):
+        if not self.config.metrics_csv_path or self._metrics_initialized:
+            return
+        parent = os.path.dirname(self.config.metrics_csv_path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        with open(self.config.metrics_csv_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["global_step", "epoch", "loss"])
+        self._metrics_initialized = True
+
+    def _append_metric(self, epoch: int, loss: float):
+        if not self.config.metrics_csv_path:
+            return
+        with open(self.config.metrics_csv_path, "a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([self.global_step + 1, epoch, float(loss)])

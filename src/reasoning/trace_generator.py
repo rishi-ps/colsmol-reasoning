@@ -14,6 +14,7 @@ Example:
 import torch
 from typing import Optional
 from dataclasses import dataclass
+from src.utils import ensure_hf_repo_cached, hf_offline_enabled
 
 
 # Default prompt template for generating visual grounding traces
@@ -58,10 +59,16 @@ class TraceGenerator:
     def load(self):
         """Load the reasoning LLM."""
         from transformers import AutoModelForCausalLM, AutoTokenizer
+        local_only = hf_offline_enabled()
+        ensure_hf_repo_cached(
+            self.config.model_name,
+            required_files=["config.json", "tokenizer_config.json"],
+        )
 
         self.tokenizer = AutoTokenizer.from_pretrained(
             self.config.model_name,
             padding_side="left",
+            local_files_only=local_only,
         )
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
@@ -69,6 +76,7 @@ class TraceGenerator:
         self.model = AutoModelForCausalLM.from_pretrained(
             self.config.model_name,
             torch_dtype=self.config.dtype,
+            local_files_only=local_only,
         ).to(self.config.device)
 
         self.model.eval()

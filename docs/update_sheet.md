@@ -1,47 +1,115 @@
-# Project Status & Update Sheet
+# Project Task List (R2R / Idea 2)
 
-Use this document to quickly restore context and understand the current state of the project.
+Last updated: `2026-02-13`  
+Resume instruction: `Open this file and continue from the first [IN PROGRESS] or [NEXT] item.`
 
-## 📅 Session: 2026-02-11 (Idea 2 Implementation)
+## Goal
 
-**Summarized Status:**
-We successfully implemented the core components for **Idea 2: Reason-to-Retrieve (R2R)**. The pipeline is validated end-to-end with a small subset of data.
+- Produce publishable evidence for `Idea 2 (Reason-to-Retrieve)` in `docs/publishable_research_directions.md`:
+  - stable training
+  - `use/none/shuffle` ablations
+  - clear comparison and interpretation.
 
-### ✅ What We Have Done
+## Milestones Achieved
 
-1.  **Project Structure**:
-    - Organized codebase into `src/`, `configs/`, `scripts/`, `docs/`.
-    - `src.models`: Implemented `ColSmolWrapper` (using `ColIdefics3` architecture) and `TeacherModelWrapper`.
-    - `src.data`: Standardized ViDoRe dataset loading with `load_vidore_dataset`.
-    - `src.reasoning`: Implemented `TraceGenerator` (Qwen2.5-0.5B) and `ReasoningAugmentedRetriever`.
+- [DONE] Core R2R pipeline implemented (trace generation + training flow).
+- [DONE] Reproducibility plumbing:
+  - `src/utils/experiment.py`
+  - run metadata + metrics + per-run folders.
+- [DONE] Training controls added:
+  - `--trace-mode use|none|shuffle`
+  - `--dtype auto|fp16|bf16|fp32`.
+- [DONE] Numerical stability fix in `src/reasoning/trainer.py`:
+  - normalize embeddings in float32 with epsilon guard (fixes fp16/bf16 NaN risk).
+- [DONE] Script correctness fix in `scripts/train_r2r.py`:
+  - removed trailing code that caused post-run `NameError: args`.
+- [DONE] Ablation comparison script added:
+  - `evaluation/compare_ablation_results.py`.
+- [DONE] Smoke trace generation completed:
+  - `data/traces/train_traces_smoke_200.json` (+ metadata).
+- [DONE] Main trace file currently available:
+  - `data/traces/train_traces_full.json` (~7.8k traces).
 
-2.  **R2R Implementation**:
-    - **Trace Generation (`scripts/generate_traces.py`)**:
-      - Implemented streaming pipeline to process `vidore/colpali_train_set` without full download.
-      - Added deterministic shuffling (`seed=42`) to ensure consistent data order.
-      - **Validated**: Generated 100 sample traces in `data/traces/train_traces.json`.
-    - **R2R Training (`scripts/train_r2r.py`)**:
-      - Implemented `R2RTrainer` with in-batch contrastive loss.
-      - Created `R2RDataset` that synchronizes streaming data with generated traces.
-      - **Validated**: Validated training loop for 3 epochs on the 100-sample subset. It successfully aligns traces and computes loss.
+## Experiment Status (Live)
 
-3.  **Distillation (Idea 1) Foundation**:
-    - Implemented MaxSim Interaction Distillation (MID) losses in `src/distillation/losses.py`.
-    - Created trainer skeleton in `src/distillation/trainer.py`.
+- [DONE] `r2r_use_seed42` finished successfully.
+  - artifacts: `checkpoints/r2r/runs/r2r_use_seed42/checkpoints/final/adapter_model.safetensors`
+  - metrics: `checkpoints/r2r/runs/r2r_use_seed42/train_metrics.csv`.
+- [DONE] `r2r_none_seed42` finished successfully.
+  - artifacts: `checkpoints/r2r/runs/r2r_none_seed42/checkpoints/final/adapter_model.safetensors`
+  - metrics: `checkpoints/r2r/runs/r2r_none_seed42/train_metrics.csv`.
+- [DONE] `r2r_shuffle_seed42` finished successfully.
+  - artifacts: `checkpoints/r2r/runs/r2r_shuffle_seed42/checkpoints/final/adapter_model.safetensors`
+  - metrics: `checkpoints/r2r/runs/r2r_shuffle_seed42/train_metrics.csv`.
+- [IN PROGRESS] Full evaluation matrix is running via `scripts/run_r2r_evals.sh` in tmux session `r2r_eval`.
+  - runner log: `logs/live/eval_all_runner.log`
+  - current per-run log example: `logs/live/eval_r2r_use_seed42_vidorev1.log`
 
-### ⏭️ What To Do Next
+## Task List
 
-1.  **Run Full Trace Generation**:
-    - Run `scripts/generate_traces.py` on the full training set (or a large subset, e.g., 20k-50k samples).
-    - _Command_: `python scripts/generate_traces.py --config configs/r2r/base.yaml --version train --output data/traces/train_traces_full.json` (remove `--limit`).
+- [DONE] Lock experiment settings:
+  - config `configs/r2r/base.yaml`
+  - seed `42`
+  - trace modes `use, none, shuffle`.
+- [DONE] Validate training health with bf16 smoke runs.
+- [DONE] Complete ablation training matrix on `train_traces_full.json`.
+  - `use`: done
+  - `none`: done
+  - `shuffle`: done
+- [DONE] Added one-command runner:
+  - `scripts/run_ablation.sh` (runs `none` then `shuffle`, skips already-complete modes, writes logs to `logs/live/`).
+- [DONE] Started evaluation for completed checkpoints.
+  - command used: `scripts/run_r2r_evals.sh`
+  - outputs currently written per benchmark:
+    - `results/r2r_use_seed42_vidorev1`, `results/r2r_use_seed42_vidorev2`, `results/r2r_use_seed42_vidorev3`
+    - `results/r2r_none_seed42_vidorev1`, `results/r2r_none_seed42_vidorev2`, `results/r2r_none_seed42_vidorev3`
+    - `results/r2r_shuffle_seed42_vidorev1`, `results/r2r_shuffle_seed42_vidorev2`, `results/r2r_shuffle_seed42_vidorev3`
+- [NEXT] Wait for `scripts/run_r2r_evals.sh` to finish all 9 runs (3 modes x 3 benchmarks).
+- [NEXT] Run ablation comparison per benchmark:
+```bash
+./venv/bin/python evaluation/compare_ablation_results.py \
+  --run use=results/r2r_use_seed42_vidorev1 \
+  --run none=results/r2r_none_seed42_vidorev1 \
+  --run shuffle=results/r2r_shuffle_seed42_vidorev1 \
+  --output-csv results/r2r_ablation_comparison_vidorev1.csv
+```
+```bash
+./venv/bin/python evaluation/compare_ablation_results.py \
+  --run use=results/r2r_use_seed42_vidorev2 \
+  --run none=results/r2r_none_seed42_vidorev2 \
+  --run shuffle=results/r2r_shuffle_seed42_vidorev2 \
+  --output-csv results/r2r_ablation_comparison_vidorev2.csv
+```
+```bash
+./venv/bin/python evaluation/compare_ablation_results.py \
+  --run use=results/r2r_use_seed42_vidorev3 \
+  --run none=results/r2r_none_seed42_vidorev3 \
+  --run shuffle=results/r2r_shuffle_seed42_vidorev3 \
+  --output-csv results/r2r_ablation_comparison_vidorev3.csv
+```
+- [NEXT] Build a single summary table from the three benchmark CSVs:
+```bash
+./venv/bin/python evaluation/aggregate_ablation_summary.py \
+  --csv vidorev1=results/r2r_ablation_comparison_vidorev1.csv \
+  --csv vidorev2=results/r2r_ablation_comparison_vidorev2.csv \
+  --csv vidorev3=results/r2r_ablation_comparison_vidorev3.csv \
+  --output-csv results/r2r_ablation_summary.csv
+```
+- [NEXT] Write interpretation in `docs/experiment_log.md`:
+  - where reasoning helps (`use > none`)
+  - whether trace quality matters (`use > shuffle`)
+  - task-level wins/failures tied to publishable claim.
 
-2.  **Run Full R2R Training**:
-    - Launch full fine-tuning of ColSmol using the generated traces.
-    - _Command_: `python scripts/train_r2r.py --config configs/r2r/base.yaml --traces data/traces/train_traces_full.json`
+## Notes For Next Session
 
-3.  **Evaluate R2R**:
-    - Run evaluation on ViDoRe v1 benchmark to measure performance improvement.
-
-4.  **Implement Idea 1 (Distillation)**:
-    - Finalize `scripts/train_distillation.py` loop (similar to R2R but with teacher scores).
-    - Run distillation experiments.
+- If a run seems stalled, check:
+  - `ps -ef | rg train_r2r.py`
+  - `tail -c 6000 logs/live/<run_name>.log | tr '\r' '\n' | tail -n 30`.
+- Use sequential foreground runs with `tee` for reliable live logs; previous `nohup` parallel attempts exited early.
+- To survive disconnects, run in tmux:
+```bash
+tmux new -s r2r_ablation
+cd /home/bs_thesis/colsmol-reasoning
+scripts/run_ablation.sh
+# detach: Ctrl+b then d
+```

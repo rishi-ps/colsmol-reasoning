@@ -81,6 +81,7 @@ class DistillationTrainer:
             lr=self.config.learning_rate,
             weight_decay=0.01,
         )
+        self.optimizer.zero_grad(set_to_none=True)
         print(f"Optimizer initialized with {len(trainable_params)} parameter groups")
         return self
 
@@ -150,13 +151,12 @@ class DistillationTrainer:
         # 3a. Contrastive Loss (In-Batch)
         # Using the logic from src/distillation/losses.py would require explicit negatives
         # wrapper. Let's compute it manually here for in-batch SimCLR style.
-        # (B, B) similarity matrix
-        sim_matrix = torch.einsum("btd,ctd->btc", s_q_emb, s_d_emb) # (B, Tq, B)?? No.
-        # We need MaxSim(q_i, d_j) for all i, j.
-        # scores[i, j] = sum_t max_p (q_i_t * d_j_p)
-        
         # Memory-efficient in-batch calculation
         B = len(queries)
+        if B < 2:
+            raise ValueError(
+                "In-batch contrastive distillation requires batch_size >= 2."
+            )
         scores_matrix = torch.zeros(B, B, device=device)
         for i in range(B):
             # q_i: (1, Tq, D)
@@ -203,7 +203,7 @@ class DistillationTrainer:
         )
 
         # --- 4. Optimization ---
-        loss.backward()
+        (loss / self.config.gradient_accumulation_steps).backward()
         
         if (self.global_step + 1) % self.config.gradient_accumulation_steps == 0:
             torch.nn.utils.clip_grad_norm_(s_model.parameters(), self.config.max_grad_norm)
@@ -232,6 +232,7 @@ class DistillationTrainer:
             print(f"{'='*50}")
 
             epoch_loss = 0.0
+            num_steps = 0
             for step, batch in enumerate(train_dataloader):
                 losses = self.train_step(batch)
 
@@ -243,8 +244,15 @@ class DistillationTrainer:
 
                 self.global_step += 1
                 epoch_loss += losses.get("total", 0.0)
+                num_steps += 1
 
-            avg_loss = epoch_loss / max(step + 1, 1)
+            if self.global_step % self.config.gradient_accumulation_steps != 0:
+                s_model = self.student.model
+                torch.nn.utils.clip_grad_norm_(s_model.parameters(), self.config.max_grad_norm)
+                self.optimizer.step()
+                self.optimizer.zero_grad(set_to_none=True)
+
+            avg_loss = epoch_loss / max(num_steps, 1)
             print(f"Epoch {epoch + 1} average loss: {avg_loss:.4f}")
 
         self._save_checkpoint(final=True)

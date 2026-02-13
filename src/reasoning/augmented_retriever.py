@@ -51,6 +51,9 @@ class ReasoningAugmentedRetriever:
         Returns:
             Augmented query string
         """
+        trace = (trace or "").strip()
+        if not trace:
+            return query
         return f"{query}{self.config.separator}{trace}"
 
     def augment_queries_batch(

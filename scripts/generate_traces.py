@@ -10,11 +10,16 @@ import json
 import yaml
 import sys
 import os
+import time
+import gc
+import torch
+from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.reasoning.trace_generator import TraceGenerator, TraceConfig
 from src.data.vidore import load_vidore_dataset
+from src.utils import create_run_name, set_global_seed, write_json
 
 
 def main():
@@ -25,7 +30,15 @@ def main():
     parser.add_argument("--limit", type=int, default=None, help="Limit number of queries")
     parser.add_argument("--batch-size", type=int, default=32, help="Batch size for processing")
     parser.add_argument("--save-every", type=int, default=100, help="Save every N queries")
+    parser.add_argument("--sleep-interval", type=float, default=0.0, help="Sleep interval (seconds) between batches to cool down")
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--run-name", type=str, default=None)
+    parser.add_argument("--hf-offline", action="store_true", help="Enable offline mode for Hugging Face model loading")
     args = parser.parse_args()
+    set_global_seed(args.seed)
+    if args.hf_offline:
+        os.environ["HF_HUB_OFFLINE"] = "1"
+        os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
     # Load config
     with open(args.config) as f:
@@ -51,12 +64,13 @@ def main():
         # Shuffle with fixed seed to ensure deterministic order across runs
         if isinstance(datasets, dict):
             for k in datasets:
-                datasets[k] = datasets[k].shuffle(seed=42, buffer_size=1000)
+                datasets[k] = datasets[k].shuffle(seed=args.seed, buffer_size=1000)
         else: # single dataset
-            datasets = datasets.shuffle(seed=42, buffer_size=1000)
+            datasets = datasets.shuffle(seed=args.seed, buffer_size=1000)
 
     # Prepare for incremental processing
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
+    run_name = args.run_name or create_run_name("traces")
     
     # Load existing traces if file exists (to resume or append)
     existing_data = []
@@ -123,6 +137,15 @@ def main():
                     json.dump(existing_data, f, indent=2)
                 new_data = [] # Reset new data buffer (but we keep adding to existing_data for full dump)
 
+            # Thermal management
+            if args.sleep_interval > 0:
+                time.sleep(args.sleep_interval)
+                
+            # Memory management to reduce heat/load
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
     # Process remaining
     if current_batch:
         traces = generator.generate_traces_batch(current_batch)
@@ -134,6 +157,24 @@ def main():
     print(f"Final save: {len(existing_data)} traces to {args.output}")
     with open(args.output, "w") as f:
         json.dump(existing_data, f, indent=2)
+
+    metadata = {
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+        "run_name": run_name,
+        "seed": args.seed,
+        "config_path": args.config,
+        "output_path": args.output,
+        "version": args.version,
+        "limit": args.limit,
+        "batch_size": args.batch_size,
+        "save_every": args.save_every,
+        "sleep_interval": args.sleep_interval,
+        "total_traces_in_output": len(existing_data),
+        "reasoning_model": cfg["reasoning_llm"]["model_name"],
+    }
+    metadata_path = f"{args.output}.meta.json"
+    write_json(metadata_path, metadata)
+    print(f"Run metadata saved: {metadata_path}")
     print("Done!")
 
 if __name__ == "__main__":

@@ -1,31 +1,24 @@
-# Reason-to-Retrieve (R2R) - Base Config
-# Idea 2: Chain-of-Thought Augmented Visual Document Retrieval
+retriever:
+  model_name: "vidore/colSmol-256M"
+  use_lora: true
+  lora_rank: 32
+  lora_alpha: 32
+  enable_gradient_checkpointing: false
 
-reasoning_llm:
+reasoning_llm: # Needed for TraceGenerator if used online, though we use offline traces mostly
   model_name: "Qwen/Qwen2.5-0.5B-Instruct"
   device: "cuda"
   max_new_tokens: 100
   temperature: 0.7
 
-retriever:
-  model_name: "vidore/colSmol-256M"
-  use_lora: true
-  lora_rank: 16
-  lora_alpha: 32
-
 training:
-  learning_rate: 2.0e-5
-  batch_size: 2
-  gradient_accumulation_steps: 4
+  learning_rate: 5.0e-6 # Reduced to prevent NaN
+  batch_size: 2       # Must be >=2 for in-batch negatives
+  gradient_accumulation_steps: 8 # Effective batch size = 16
   num_epochs: 3
   warmup_steps: 100
+  temperature: 0.1
   separator: " [SEP] "
-
-data:
-  train_version: "v1"
-  eval_versions: ["v1", "v2", "v3"]
-  traces_dir: "data/traces"
 
 output:
   checkpoint_dir: "checkpoints/r2r"
-  log_dir: "logs/r2r"

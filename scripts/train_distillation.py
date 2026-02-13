@@ -30,6 +30,22 @@ class DistillationDataset(IterableDataset):
         self.limit = limit
         print("Loading colpali_train_set (streaming)...")
         self.dataset = load_vidore_dataset(version="train", streaming=True)
+        if isinstance(self.dataset, dict):
+            if not self.dataset:
+                raise RuntimeError(
+                    "Failed to load training dataset `vidore/colpali_train_set`. "
+                    "If running without network, ensure dataset is cached locally."
+                )
+            if len(self.dataset) == 1:
+                self.dataset = next(iter(self.dataset.values()))
+            else:
+                raise RuntimeError(
+                    "Unexpected multiple datasets returned for version=train."
+                )
+        if not hasattr(self.dataset, "shuffle"):
+            raise RuntimeError(
+                f"Loaded training dataset does not support shuffle: {type(self.dataset)}"
+            )
         self.dataset = self.dataset.shuffle(seed=42, buffer_size=1000)
 
     def __iter__(self):

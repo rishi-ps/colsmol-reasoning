@@ -8,6 +8,7 @@ Runs in inference-only mode with optional CPU offloading for 8GB VRAM.
 import torch
 from typing import Optional
 from dataclasses import dataclass
+from src.utils import ensure_hf_repo_cached, hf_offline_enabled
 
 
 @dataclass
@@ -36,20 +37,33 @@ class TeacherModelWrapper:
         """Load the teacher model in eval mode."""
         # Auto-detect model type from name
         model_name = self.config.model_name.lower()
+        local_only = hf_offline_enabled()
+        ensure_hf_repo_cached(
+            self.config.model_name,
+            required_files=["config.json", "tokenizer_config.json"],
+        )
 
         if "colpali" in model_name:
             from colpali_engine.models import ColPali, ColPaliProcessor
-            self.processor = ColPaliProcessor.from_pretrained(self.config.model_name)
+            self.processor = ColPaliProcessor.from_pretrained(
+                self.config.model_name,
+                local_files_only=local_only,
+            )
             self.model = ColPali.from_pretrained(
                 self.config.model_name,
                 torch_dtype=self.config.dtype,
+                local_files_only=local_only,
             ).to(self.config.device)
         elif "colqwen" in model_name:
             from colpali_engine.models import ColQwen2, ColQwen2Processor
-            self.processor = ColQwen2Processor.from_pretrained(self.config.model_name)
+            self.processor = ColQwen2Processor.from_pretrained(
+                self.config.model_name,
+                local_files_only=local_only,
+            )
             self.model = ColQwen2.from_pretrained(
                 self.config.model_name,
                 torch_dtype=self.config.dtype,
+                local_files_only=local_only,
             ).to(self.config.device)
         else:
             raise ValueError(f"Unknown teacher model: {self.config.model_name}")
@@ -93,10 +107,9 @@ class TeacherModelWrapper:
             attention_maps: (num_queries, num_query_tokens, num_doc_tokens)
                 Softmax-normalized similarity showing the teacher's matching pattern.
         """
-        # query_embeddings: (Q, Tq, D)
-        # doc_embeddings:   (D_docs, Td, D)
-        # For each query token, compute similarity with all doc tokens
-        # and softmax to get the "attention" pattern
-        sim = torch.einsum("qtd,ptd->qtp", query_embeddings, doc_embeddings)
+        # query_embeddings: (B, Tq, D)
+        # doc_embeddings:   (B, Td, D)
+        # For each sample in the batch, compute token-token similarities.
+        sim = torch.einsum("bqd,bkd->bqk", query_embeddings, doc_embeddings)
         attention = torch.softmax(sim / (query_embeddings.shape[-1] ** 0.5), dim=-1)
         return attention
