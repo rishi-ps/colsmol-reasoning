@@ -1,6 +1,6 @@
-# ColSmol-Reasoning — Technical Audit
+# ColSmol-Reasoning 
 
-15 Feb 2026. Full codebase review covering architecture, training, losses, data, and experimental state.
+15 Feb 2026. 
 
 ---
 
@@ -121,9 +121,9 @@ All numbers below come directly from the MTEB JSON evaluation outputs stored in 
 
 ---
 
-### 4.1 ViDoRe v1 — Primary Benchmark (10 Subtasks)
+### 4.1 ViDoRe v1 — Baseline (10 Subtasks)
 
-#### 4.1.1 nDCG@5 Comparison (ColSmol vs Teachers)
+nDCG@5 comparison against the teacher models:
 
 | Task | ColSmol-256M | ColPali (3B) | ColQwen2 (2B) | Δ ColPali |
 |---|---:|---:|---:|---:|
@@ -139,81 +139,9 @@ All numbers below come directly from the MTEB JSON evaluation outputs stored in 
 | SynDoc-Health | 95.1 | 94.4 | 97.3 | +0.7 |
 | **Average** | **77.7** | **81.3** | **86.6** | **−3.6** |
 
-ColSmol actually beats ColPali on 5 of 10 subtasks (DocVQA, InfoVQA, TATDQA, SynDoc-Energy, SynDoc-Health). The average gap is dragged down by three tasks where layout/table understanding matters most: TabFQuAD (−21.8), ShiftProject (−17.0), and ArxivQA (−7.1).
+ColSmol beats ColPali on 5/10 subtasks. The average deficit is driven by three layout/table-heavy tasks: TabFQuAD (−21.8), ShiftProject (−17.0), ArxivQA (−7.1). Recall@100 exceeds 96% on all tasks — the relevant documents are retrieved, just not ranked high enough.
 
-![ViDoRe v1 nDCG@5 Grouped Bar](../results/charts/v1_ndcg5_bar.png)
-
-![Gap to ColPali](../results/charts/v1_gap_to_colpali.png)
-
-#### 4.1.2 nDCG Across Cutoffs
-
-Full nDCG breakdown at k ∈ {1, 3, 5, 10, 20, 100} from the MTEB JSONs:
-
-| Task | @1 | @3 | @5 | @10 | @20 | @100 |
-|---|---:|---:|---:|---:|---:|---:|
-| ArxivQA | 65.0 | 70.6 | 72.0 | 73.5 | 74.9 | 76.4 |
-| DocVQA | 45.7 | 53.3 | 55.7 | 57.6 | 59.4 | 61.4 |
-| InfoVQA | 76.5 | 81.5 | 82.5 | 83.7 | 84.6 | 85.2 |
-| TabFQuAD | 52.1 | 59.7 | 62.1 | 64.5 | 66.3 | 69.0 |
-| TATDQA | 62.1 | 72.1 | 74.5 | 76.7 | 77.7 | 78.4 |
-| ShiftProject | 42.0 | 53.4 | 56.2 | 59.9 | 61.7 | 63.6 |
-| SynDoc-AI | 90.0 | 94.5 | 94.9 | 94.9 | 94.9 | 94.9 |
-| SynDoc-Energy | 88.0 | 91.0 | 91.8 | 92.1 | 92.6 | 93.1 |
-| SynDoc-Gov | 85.0 | 92.2 | 92.6 | 93.3 | 93.3 | 93.3 |
-| SynDoc-Health | 90.0 | 94.3 | 95.1 | 95.1 | 95.4 | 95.4 |
-
-![nDCG Heatmap Across Cutoffs](../results/charts/v1_ndcg_heatmap.png)
-
-#### 4.1.3 Recall@k
-
-| Task | @1 | @5 | @10 | @20 | @100 |
-|---|---:|---:|---:|---:|---:|
-| ArxivQA | 65.0 | 78.2 | 83.0 | 88.4 | 96.4 |
-| DocVQA | 45.6 | 64.4 | 70.1 | 78.2 | 87.2 |
-| InfoVQA | 76.4 | 87.2 | 90.9 | 93.5 | 98.0 |
-| TabFQuAD | 52.1 | 70.7 | 78.2 | 85.0 | 100.0 |
-| TATDQA | 61.9 | 84.9 | 91.7 | 95.0 | 99.0 |
-| ShiftProject | 42.0 | 69.0 | 80.0 | 86.0 | 97.0 |
-| SynDoc-AI | 90.0 | 99.0 | 99.0 | 99.0 | 99.0 |
-| SynDoc-Energy | 88.0 | 95.0 | 96.0 | 98.0 | 100.0 |
-| SynDoc-Gov | 85.0 | 98.0 | 100.0 | 100.0 | 100.0 |
-| SynDoc-Health | 90.0 | 99.0 | 99.0 | 99.0 | 100.0 |
-
-Even on the hard tasks, Recall@100 is north of 96% everywhere — the relevant documents exist in the top 100, they're just not ranked high enough.
-
-![Recall Curves](../results/charts/v1_recall_curves.png)
-
-#### 4.1.4 MAP and MRR @5
-
-| Task | MAP@5 | MRR@5 |
-|---|---:|---:|
-| ArxivQA | 69.9 | 69.9 |
-| DocVQA | 52.7 | 53.0 |
-| InfoVQA | 80.8 | 80.8 |
-| TabFQuAD | 59.2 | 59.2 |
-| TATDQA | 71.0 | 71.1 |
-| ShiftProject | 52.0 | 52.0 |
-| SynDoc-AI | 93.5 | 93.5 |
-| SynDoc-Energy | 90.8 | 90.8 |
-| SynDoc-Gov | 90.8 | 90.8 |
-| SynDoc-Health | 93.8 | 93.8 |
-
-#### 4.1.5 Accuracy (Exact Match @1)
-
-| Task | Accuracy |
-|---|---:|
-| ArxivQA | 0.650 |
-| DocVQA | 0.456 |
-| InfoVQA | 0.764 |
-| TabFQuAD | 0.521 |
-| TATDQA | 0.619 |
-| ShiftProject | 0.420 |
-| SynDoc-AI | 0.900 |
-| SynDoc-Energy | 0.880 |
-| SynDoc-Gov | 0.850 |
-| SynDoc-Health | 0.900 |
-
-![Radar Chart](../results/charts/v1_radar.png)
+Full per-cutoff nDCG, Recall, MAP, MRR, and Accuracy breakdowns are available in the MTEB JSONs under `results/v1/`. Charts: `results/charts/v1_ndcg5_bar.png`, `v1_gap_to_colpali.png`, `v1_radar.png`, `v1_ndcg_heatmap.png`, `v1_recall_curves.png`.
 
 ---
 
@@ -262,16 +190,82 @@ Recall@100 remains high (86–97%), matching the v1 pattern: the retriever surfa
 
 ---
 
-### 4.3 R2R Ablation — Training Complete, No Evaluation Results in Repo
+### 4.3 R2R Ablation (Novel Approach) — No Evaluation Results Available
 
-All three ablation training runs completed (seed 42):
-- `r2r_use_seed42` — aligned traces
-- `r2r_none_seed42` — query only baseline
-- `r2r_shuffle_seed42` — mismatched traces (length control)
+#### What was done
 
-The 9-run evaluation matrix (3 trace modes × 3 benchmarks) was launched. **No R2R evaluation result files exist in the repository.** Training metric CSVs (`train_metrics.csv`) are written to git-ignored `checkpoints/` directories and are also absent from the committed tree.
+Three R2R training runs completed successfully with seed 42:
 
-From the experiment log, the partial signal observed during evaluation was not encouraging — the expected `use > none > shuffle` ordering did not materialize clearly across tasks.
+| Run | Trace Mode | Purpose | Training Status |
+|---|---|---|---|
+| `r2r_use_seed42` | Aligned traces | Experimental condition | Complete |
+| `r2r_none_seed42` | Empty (query only) | Baseline | Complete |
+| `r2r_shuffle_seed42` | Mismatched traces | Length control | Complete |
+
+Training artifacts were written to `checkpoints/r2r/runs/<run_name>/`:
+- Final adapter weights: `checkpoints/final/adapter_model.safetensors`
+- Per-step loss values: `train_metrics.csv`
+
+The full 9-run evaluation matrix (3 modes × ViDoRe v1/v2/v3) was launched via `scripts/run_r2r_evals.sh`.
+
+#### What's missing
+
+**No R2R evaluation results exist in the repository.** The expected output directories do not exist:
+
+```
+results/r2r_use_seed42_vidorev1/      ← missing
+results/r2r_use_seed42_vidorev2/      ← missing
+results/r2r_use_seed42_vidorev3/      ← missing
+results/r2r_none_seed42_vidorev1/     ← missing
+results/r2r_none_seed42_vidorev2/     ← missing
+results/r2r_none_seed42_vidorev3/     ← missing
+results/r2r_shuffle_seed42_vidorev1/  ← missing
+results/r2r_shuffle_seed42_vidorev2/  ← missing
+results/r2r_shuffle_seed42_vidorev3/  ← missing
+```
+
+The training checkpoints directory (`checkpoints/`) is git-ignored and absent from the current machine. Training was likely run on a different host (`/home/bs_thesis/colsmol-reasoning`). The `train_metrics.csv` files that would provide loss curves are also not available.
+
+No comparison CSVs, summary tables, or per-task deltas have been generated. The experiment log (`docs/experiment_log.md`) has "TBD" in every R2R result cell.
+
+#### What's needed to produce results
+
+1. **Recover checkpoints** — copy the three adapter directories from the training host.
+2. **Run evaluations** — `scripts/run_r2r_evals.sh` handles all 9 combinations.
+3. **Generate comparison tables** — per-benchmark:
+   ```bash
+   python evaluation/compare_ablation_results.py \
+     --run use=results/r2r_use_seed42_vidorev1 \
+     --run none=results/r2r_none_seed42_vidorev1 \
+     --run shuffle=results/r2r_shuffle_seed42_vidorev1 \
+     --output-csv results/r2r_ablation_comparison_vidorev1.csv
+   ```
+4. **Aggregate across benchmarks**:
+   ```bash
+   python evaluation/aggregate_ablation_summary.py \
+     --csv vidorev1=results/r2r_ablation_comparison_vidorev1.csv \
+     --csv vidorev2=results/r2r_ablation_comparison_vidorev2.csv \
+     --csv vidorev3=results/r2r_ablation_comparison_vidorev3.csv \
+     --output-csv results/r2r_ablation_summary.csv
+   ```
+
+#### Expected analysis (once results land)
+
+The ablation is designed to fill this table:
+
+| Benchmark | None Avg nDCG@5 | Use Avg nDCG@5 | Shuffle Avg nDCG@5 | Δ Use−None | Δ Use−Shuffle |
+|---|---:|---:|---:|---:|---:|
+| ViDoRe v1 | — | — | — | — | — |
+| ViDoRe v2 | — | — | — | — | — |
+| ViDoRe v3 | — | — | — | — | — |
+| **Overall** | — | — | — | — | — |
+
+Key questions the ablation answers:
+- **Use > None?** → Reasoning traces help retrieval.
+- **Use > Shuffle?** → Trace *content* matters, not just extra tokens.
+- **Which tasks benefit most?** → Expect larger gains on layout-heavy tasks (TabFQuAD, ShiftProject) where visual grounding cues should matter.
+
+The comparison and aggregation scripts are tested and ready — once the eval JSONs land, the full per-task breakdown and cross-benchmark summary are one command away.
 
 ---
 
