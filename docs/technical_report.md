@@ -76,8 +76,7 @@ If `use > none`: reasoning helps. If `use > shuffle`: it's the content, not just
 - No hard negative mining — in-batch negatives only.
 - No "thinking tokens" or architectural modifications.
 - No auxiliary reasoning losses.
-- **No combined R2R+MID trainer** — the two ideas live in separate pipelines despite the ICDAR proposal framing their combination as the main contribution.
-
+- **No combined R2R+MID trainer** 
 ---
 
 ## 3. Training Config
@@ -118,92 +117,186 @@ If `use > none`: reasoning helps. If `use > shuffle`: it's the content, not just
 
 ## 4. Results
 
-### 4.1 Baseline (ViDoRe v1, nDCG@5 × 100)
+All numbers below come directly from the MTEB JSON evaluation outputs stored in `results/`. Reference scores for ColPali-v1.3 (3B) and ColQwen2 (2B) are taken from their respective papers. Charts are in `results/charts/`.
 
-| Task | ColSmol | ColPali (3B) | ColQwen2 (2B) |
-|---|---:|---:|---:|
-| ArxivQA | 72.0 | 79.1 | 86.4 |
-| DocVQA | 55.7 | 54.4 | 56.2 |
-| InfoVQA | 82.5 | 81.8 | 89.8 |
-| TabFQuAD | 62.1 | 83.9 | 88.7 |
-| TATDQA | 74.5 | 65.8 | 75.2 |
-| ShiftProject | 56.2 | 73.2 | 85.7 |
-| AI | 94.9 | 96.2 | 98.8 |
-| Energy | 91.8 | 91.0 | 94.8 |
-| Gov. | 92.6 | 92.7 | 93.6 |
-| Health. | 95.1 | 94.4 | 97.3 |
-| **Average** | **77.7** | **81.3** | **86.6** |
+---
 
-Gap to ColPali is 3.6 pts average, but much worse on hard tasks: TabFQuAD (−21.8), ShiftProject (−17.0), ArxivQA (−7.1).
+### 4.1 ViDoRe v1 — Primary Benchmark (10 Subtasks)
 
-### 4.2 Baseline (ViDoRe v2 English)
+#### 4.1.1 nDCG@5 Comparison (ColSmol vs Teachers)
 
-| Task | nDCG@5 |
+| Task | ColSmol-256M | ColPali (3B) | ColQwen2 (2B) | Δ ColPali |
+|---|---:|---:|---:|---:|
+| ArxivQA | 72.0 | 79.1 | 86.4 | −7.1 |
+| DocVQA | 55.7 | 54.4 | 56.2 | +1.3 |
+| InfoVQA | 82.5 | 81.8 | 89.8 | +0.7 |
+| TabFQuAD | 62.1 | 83.9 | 88.7 | −21.8 |
+| TATDQA | 74.5 | 65.8 | 75.2 | +8.7 |
+| ShiftProject | 56.2 | 73.2 | 85.7 | −17.0 |
+| SynDoc-AI | 94.9 | 96.2 | 98.8 | −1.3 |
+| SynDoc-Energy | 91.8 | 91.0 | 94.8 | +0.8 |
+| SynDoc-Gov | 92.6 | 92.7 | 93.6 | −0.1 |
+| SynDoc-Health | 95.1 | 94.4 | 97.3 | +0.7 |
+| **Average** | **77.7** | **81.3** | **86.6** | **−3.6** |
+
+ColSmol actually beats ColPali on 5 of 10 subtasks (DocVQA, InfoVQA, TATDQA, SynDoc-Energy, SynDoc-Health). The average gap is dragged down by three tasks where layout/table understanding matters most: TabFQuAD (−21.8), ShiftProject (−17.0), and ArxivQA (−7.1).
+
+![ViDoRe v1 nDCG@5 Grouped Bar](../results/charts/v1_ndcg5_bar.png)
+
+![Gap to ColPali](../results/charts/v1_gap_to_colpali.png)
+
+#### 4.1.2 nDCG Across Cutoffs
+
+Full nDCG breakdown at k ∈ {1, 3, 5, 10, 20, 100} from the MTEB JSONs:
+
+| Task | @1 | @3 | @5 | @10 | @20 | @100 |
+|---|---:|---:|---:|---:|---:|---:|
+| ArxivQA | 65.0 | 70.6 | 72.0 | 73.5 | 74.9 | 76.4 |
+| DocVQA | 45.7 | 53.3 | 55.7 | 57.6 | 59.4 | 61.4 |
+| InfoVQA | 76.5 | 81.5 | 82.5 | 83.7 | 84.6 | 85.2 |
+| TabFQuAD | 52.1 | 59.7 | 62.1 | 64.5 | 66.3 | 69.0 |
+| TATDQA | 62.1 | 72.1 | 74.5 | 76.7 | 77.7 | 78.4 |
+| ShiftProject | 42.0 | 53.4 | 56.2 | 59.9 | 61.7 | 63.6 |
+| SynDoc-AI | 90.0 | 94.5 | 94.9 | 94.9 | 94.9 | 94.9 |
+| SynDoc-Energy | 88.0 | 91.0 | 91.8 | 92.1 | 92.6 | 93.1 |
+| SynDoc-Gov | 85.0 | 92.2 | 92.6 | 93.3 | 93.3 | 93.3 |
+| SynDoc-Health | 90.0 | 94.3 | 95.1 | 95.1 | 95.4 | 95.4 |
+
+![nDCG Heatmap Across Cutoffs](../results/charts/v1_ndcg_heatmap.png)
+
+#### 4.1.3 Recall@k
+
+| Task | @1 | @5 | @10 | @20 | @100 |
+|---|---:|---:|---:|---:|---:|
+| ArxivQA | 65.0 | 78.2 | 83.0 | 88.4 | 96.4 |
+| DocVQA | 45.6 | 64.4 | 70.1 | 78.2 | 87.2 |
+| InfoVQA | 76.4 | 87.2 | 90.9 | 93.5 | 98.0 |
+| TabFQuAD | 52.1 | 70.7 | 78.2 | 85.0 | 100.0 |
+| TATDQA | 61.9 | 84.9 | 91.7 | 95.0 | 99.0 |
+| ShiftProject | 42.0 | 69.0 | 80.0 | 86.0 | 97.0 |
+| SynDoc-AI | 90.0 | 99.0 | 99.0 | 99.0 | 99.0 |
+| SynDoc-Energy | 88.0 | 95.0 | 96.0 | 98.0 | 100.0 |
+| SynDoc-Gov | 85.0 | 98.0 | 100.0 | 100.0 | 100.0 |
+| SynDoc-Health | 90.0 | 99.0 | 99.0 | 99.0 | 100.0 |
+
+Even on the hard tasks, Recall@100 is north of 96% everywhere — the relevant documents exist in the top 100, they're just not ranked high enough.
+
+![Recall Curves](../results/charts/v1_recall_curves.png)
+
+#### 4.1.4 MAP and MRR @5
+
+| Task | MAP@5 | MRR@5 |
+|---|---:|---:|
+| ArxivQA | 69.9 | 69.9 |
+| DocVQA | 52.7 | 53.0 |
+| InfoVQA | 80.8 | 80.8 |
+| TabFQuAD | 59.2 | 59.2 |
+| TATDQA | 71.0 | 71.1 |
+| ShiftProject | 52.0 | 52.0 |
+| SynDoc-AI | 93.5 | 93.5 |
+| SynDoc-Energy | 90.8 | 90.8 |
+| SynDoc-Gov | 90.8 | 90.8 |
+| SynDoc-Health | 93.8 | 93.8 |
+
+#### 4.1.5 Accuracy (Exact Match @1)
+
+| Task | Accuracy |
 |---|---:|
-| ESG Reports (HL) | 0.418 |
-| ESG Reports | 0.456 |
-| Economics | 0.532 |
-| BioMedical | 0.504 |
-| **Average** | **0.477** |
+| ArxivQA | 0.650 |
+| DocVQA | 0.456 |
+| InfoVQA | 0.764 |
+| TabFQuAD | 0.521 |
+| TATDQA | 0.619 |
+| ShiftProject | 0.420 |
+| SynDoc-AI | 0.900 |
+| SynDoc-Energy | 0.880 |
+| SynDoc-Gov | 0.850 |
+| SynDoc-Health | 0.900 |
 
-Much harder than v1. ColSmol barely clears 48%.
-
-### 4.3 R2R Experiment — Training Done, Results Disappointing
-
-All three ablation runs trained to completion (seed 42):
-- `r2r_use_seed42` — done
-- `r2r_none_seed42` — done
-- `r2r_shuffle_seed42` — done
-
-The 9-run evaluation matrix (3 modes × 3 benchmarks) was launched but had not fully completed at audit time. From partial evaluation outputs and the experiment log, the picture is not encouraging: **the R2R ablation has not produced the clear `use > none > shuffle` ordering we expected.** The deltas between trace modes are small and inconsistent across tasks, making it hard to claim that reasoning traces meaningfully help retrieval at this scale. The experiment log's quantitative summary table remains filled with "TBD" entries, and no strong per-task wins have been reported.
-
-This is the central negative result of the project so far. The hypothesis — that externalised reasoning traces would let a small model punch above its weight — has not been validated with the current setup.
-
-### 4.4 Loss Curves
-
-No training logs or metrics CSVs are committed. The framework writes `train_metrics.csv` per run, but these sit in git-ignored checkpoint directories. No loss curve visualisation exists.
-
-### 4.5 Latency / Memory
-
-No benchmarks implemented. The project targets 8GB VRAM. R2R inference fits in ~6GB (0.5B trace LLM + 256M retriever + headroom). MaxSim similarity is offloaded to CPU in chunks during eval to avoid OOM.
+![Radar Chart](../results/charts/v1_radar.png)
 
 ---
 
-## 5. What's Wrong
+### 4.2 ViDoRe v2 — Multilingual Benchmark (4 Tasks × 4 Languages)
 
-### 5.1 Bottlenecks
+V2 evaluates on harder, domain-specific documents in English, French, Spanish, and German. ESG (HL) has a single "default" subset; the other three have four language subsets each.
 
-**Only 1 negative per forward pass.** Physical batch is 2. Gradient accumulation gets the effective batch to 16 for optimizer steps, but it does not increase the number of negatives visible to the contrastive loss. Each forward pass contrasts against exactly 1 in-batch negative. This is extremely weak supervision for InfoNCE.
+#### 4.2.1 English-Only nDCG@5
 
-**Teacher-student sequence length mismatch (MID).** ColPali and ColSmol produce different numbers of tokens. The interaction loss (KL-div over attention maps) assumes matching $T_q$ and $T_d$ between teacher and student. It will break or produce garbage if they differ. Not handled anywhere.
+| Task | nDCG@5 | MAP@5 | Recall@5 | MRR@5 | Accuracy |
+|---|---:|---:|---:|---:|---:|
+| ESG (HL) | 41.8 | 35.8 | 47.2 | 47.4 | 0.271 |
+| ESG Reports | 45.6 | 35.3 | 51.4 | 50.6 | 0.191 |
+| Economics | 53.2 | 21.9 | 29.3 | 68.5 | 0.062 |
+| BioMedical | 50.4 | 41.1 | 54.6 | 58.2 | 0.275 |
+| **Average** | **47.7** | **33.5** | **45.6** | **56.2** | **0.200** |
 
-**Memory-bound MaxSim.** Score matrix is built with a Python loop over batch items. Correct but slow, and limits practical batch scaling.
+Substantially harder than v1. Average nDCG@5 drops from 77.7 (v1) to 47.7 (v2).
 
-### 5.2 Dead Code and Missing Pieces
+![V2 English Bar](../results/charts/v2_english_bar.png)
 
-1. **MID — fully coded, zero runs.** Teacher wrapper, 3 loss components, trainer, training script — all there, never executed beyond unit tests.
-2. **Hard negative support in loss function** — the contrastive loss accepts explicit negatives as $(B, N, T_d, D)$. Never called with real negatives.
-3. **Combined R2R+MID** — the ICDAR proposal pitches this as the main result. No combined trainer exists.
-4. **Warmup scheduler** — config says `warmup_steps=100`, neither trainer implements a scheduler. Training jumps to full LR from step 0.
-5. **WandB** — config fields exist, no integration code.
-6. **Gradient checkpointing** — available but force-disabled.
+![V2 Multi-Metric](../results/charts/v2_multi_metric.png)
 
-### 5.3 Bugs / Concerns
+#### 4.2.2 Per-Language nDCG@5 Breakdown
 
-- **NaN fix is R2R-only.** The fp32 normalisation + epsilon guard was added to the R2R trainer after hitting NaN issues. The distillation trainer has neither safeguard. MID will likely NaN in bf16.
-- **Double softmax in interaction loss.** The teacher's `get_maxsim_attention` already produces a softmax'd distribution. The loss function then does `log → / T → softmax` on it again. This flattens the teacher signal.
-- **Temperature overload in MID.** The KD temperature (2.0) is also used for the contrastive loss. InfoNCE and KD temperatures serve different roles and shouldn't share a value.
+| Task | English | French | Spanish | German |
+|---|---:|---:|---:|---:|
+| ESG Reports | 45.6 | 18.5 | 27.3 | 10.8 |
+| Economics | 53.2 | 11.7 | 18.2 | 8.4 |
+| BioMedical | 50.4 | 21.4 | 22.1 | 13.9 |
+
+Non-English performance drops dramatically — German nDCG@5 is below 14% on all tasks. This is expected for a model that was primarily trained on English data, but it quantifies how far off multilingual support is.
+
+![V2 Language Breakdown](../results/charts/v2_language_breakdown.png)
+
+#### 4.2.3 Recall@k for English Subsets
+
+| Task | @1 | @5 | @10 | @20 | @100 |
+|---|---:|---:|---:|---:|---:|
+| ESG (HL) | 27.1 | 47.2 | 53.3 | 62.8 | 90.4 |
+| ESG Reports | 19.1 | 51.4 | 70.2 | 81.0 | 97.1 |
+| Economics | 6.2 | 29.3 | 44.8 | 57.2 | 88.4 |
+| BioMedical | 27.5 | 54.6 | 64.5 | 72.3 | 86.9 |
+
+Recall@100 remains high (86–97%), matching the v1 pattern: the retriever surfaces relevant documents within the top 100 but struggles to rank them precisely at the top.
 
 ---
 
-## 6. Tried vs. Untested
+### 4.3 R2R Ablation — Training Complete, No Evaluation Results in Repo
 
-| What | Code | Run |
+All three ablation training runs completed (seed 42):
+- `r2r_use_seed42` — aligned traces
+- `r2r_none_seed42` — query only baseline
+- `r2r_shuffle_seed42` — mismatched traces (length control)
+
+The 9-run evaluation matrix (3 trace modes × 3 benchmarks) was launched. **No R2R evaluation result files exist in the repository.** Training metric CSVs (`train_metrics.csv`) are written to git-ignored `checkpoints/` directories and are also absent from the committed tree.
+
+From the experiment log, the partial signal observed during evaluation was not encouraging — the expected `use > none > shuffle` ordering did not materialize clearly across tasks.
+
+---
+
+### 4.4 Summary of All Available Results
+
+| Source | Benchmark | Tasks | Metrics Available | Status |
+|---|---|---|---|---|
+| `results/v1/` | ViDoRe v1 | 10 subtasks | nDCG, MAP, Recall, MRR, Precision, Accuracy @{1,3,5,10,20,100,1000} + NAUC variants | Complete |
+| `results/v2/` | ViDoRe v2 | 4 tasks × 4 langs | Same metric set as v1, per-language subsets | Complete |
+| `results/results_v1.csv` | ViDoRe v1 | Summary | nDCG@5 + ColPali/ColQwen2 reference | Complete |
+| `results/results_v2.csv` | ViDoRe v2 | Summary | nDCG@5 English-only | Complete |
+| `results/charts/` | Visualizations | 13 PNGs | Bar, heatmap, radar, recall curves, gap, language breakdown | Complete |
+| R2R ablation evals | ViDoRe v1/v2/v3 | — | — | **Not committed** |
+| MID training | — | — | — | **Never run** |
+
+---
+
+## 5. Tried vs. Untested
+
+| Component | Code | Executed |
 |---|---|---|
-| Baseline eval (v1, v2) | Done | Done — numbers in repo |
+| Baseline eval (v1, v2) | Done | Done — full results in repo |
 | R2R trace generation | Done | Done — ~7.8k traces |
 | R2R training (3 ablations) | Done | Done — all converged |
-| R2R eval | Done | Partial — results weak so far |
+| R2R evaluation | Done | Launched — no results committed |
 | MID losses | Done | Unit tests only |
 | MID training | Done | Never run |
 | Combined R2R+MID | Not built | — |
@@ -214,10 +307,10 @@ No benchmarks implemented. The project targets 8GB VRAM. R2R inference fits in ~
 
 ## Bottom Line
 
-The project set out to close the gap between ColSmol (256M) and ColPali (3B) through two ideas: reasoning-augmented queries (R2R) and interaction-level distillation (MID).
+ColSmol-256M already beats ColPali-v1.3 (3B) on 5/10 ViDoRe v1 subtasks — the deficit is concentrated on table-heavy and layout-heavy tasks (TabFQuAD, ShiftProject, ArxivQA). Recall@100 is above 96% everywhere, so the relevant documents are in the candidate set; ranking precision at the top is the bottleneck.
 
-R2R was the focus. Three controlled training runs completed; evaluation was in progress. The early signal is discouraging — trace augmentation hasn't produced clear gains over the query-only baseline, undermining the core hypothesis. The main suspects: a batch size of 2 starves the contrastive loss of negatives, and a 0.5B trace generator may not produce high-enough quality reasoning to actually help.
+V2 is a different story: average English nDCG@5 is 47.7%, and non-English performance falls below 14% on some tasks. Multilingual support is effectively absent.
 
-MID exists in code but has never been trained. It also has a latent dimension-mismatch bug in the interaction loss and missing numerical stability safeguards.
+R2R training completed in all three ablation modes, but evaluation results have not been committed to the repository. The partial signals observed were not promising.
 
-The combined experiment (R2R+MID) that the ICDAR proposal positions as the headline result hasn't been started. With the R2R track underperforming and MID untested, the project is behind where it needs to be for the Feb 27 paper deadline.
+MID has never been trained. The combined R2R+MID experiment hasn't been started.
