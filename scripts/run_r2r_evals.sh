@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
 
 # Full R2R evaluation runner:
 # - runs use/none/shuffle
@@ -16,6 +16,7 @@ mkdir -p "$LOG_DIR"
 export HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}"
 export TRANSFORMERS_OFFLINE="${TRANSFORMERS_OFFLINE:-1}"
 export HF_DATASETS_OFFLINE="${HF_DATASETS_OFFLINE:-1}"
+MAX_RETRIES="${MAX_RETRIES:-2}"
 
 declare -a MODES=("use" "none" "shuffle")
 declare -a BENCHMARKS=("ViDoRe(v1)" "ViDoRe(v2)" "ViDoRe(v3)")
@@ -24,6 +25,57 @@ declare -A RUN_NAMES=(
   ["none"]="r2r_none_seed42"
   ["shuffle"]="r2r_shuffle_seed42"
 )
+
+failed_runs=()
+
+run_eval() {
+  local mode="$1"
+  local benchmark="$2"
+  local adapter="$3"
+  local output_dir="$4"
+  local trace_cache="$5"
+  local log_file="$6"
+
+  local attempt=1
+  local force_online=0
+
+  : > "$log_file"
+  while (( attempt <= MAX_RETRIES )); do
+    echo "[attempt ${attempt}/${MAX_RETRIES}] mode=${mode} benchmark=${benchmark}" | tee -a "$log_file"
+    if (( force_online == 1 )); then
+      echo "Detected offline dataset miss previously; retrying with online HF flags." | tee -a "$log_file"
+      env HF_HUB_OFFLINE=0 TRANSFORMERS_OFFLINE=0 HF_DATASETS_OFFLINE=0 \
+        "$PY" evaluation/evaluate_r2r.py \
+          --benchmark "$benchmark" \
+          --output-folder "$output_dir" \
+          --adapter "$adapter" \
+          --trace-mode "$mode" \
+          --trace-cache "$trace_cache" \
+          2>&1 | tee -a "$log_file"
+    else
+      "$PY" evaluation/evaluate_r2r.py \
+        --benchmark "$benchmark" \
+        --output-folder "$output_dir" \
+        --adapter "$adapter" \
+        --trace-mode "$mode" \
+        --trace-cache "$trace_cache" \
+        2>&1 | tee -a "$log_file"
+    fi
+
+    local status="${PIPESTATUS[0]}"
+    if [[ "$status" -eq 0 ]]; then
+      return 0
+    fi
+
+    if grep -q "OfflineModeIsEnabled" "$log_file" && (( force_online == 0 )); then
+      force_online=1
+    fi
+
+    attempt=$((attempt + 1))
+  done
+
+  return 1
+}
 
 for mode in "${MODES[@]}"; do
   run_name="${RUN_NAMES[$mode]}"
@@ -40,11 +92,6 @@ for mode in "${MODES[@]}"; do
     trace_cache="data/traces/eval_${suffix}.json"
     log_file="${LOG_DIR}/eval_${run_name}_${suffix}.log"
 
-    if find "$output_dir" -name "*.json" -type f 2>/dev/null | grep -q .; then
-      echo "Skipping ${mode} ${benchmark}; JSON results already exist in ${output_dir}"
-      continue
-    fi
-
     echo ""
     echo "============================================================"
     echo "Running mode=${mode}, benchmark=${benchmark}"
@@ -53,15 +100,21 @@ for mode in "${MODES[@]}"; do
     echo "log=${log_file}"
     echo "============================================================"
 
-    "$PY" evaluation/evaluate_r2r.py \
-      --benchmark "$benchmark" \
-      --output-folder "$output_dir" \
-      --adapter "$adapter" \
-      --trace-mode "$mode" \
-      --trace-cache "$trace_cache" \
-      2>&1 | tee "$log_file"
+    if ! run_eval "$mode" "$benchmark" "$adapter" "$output_dir" "$trace_cache" "$log_file"; then
+      echo "FAILED mode=${mode}, benchmark=${benchmark}. Continuing with next run."
+      failed_runs+=("${mode}|${benchmark}|${log_file}")
+    fi
   done
 done
 
 echo ""
-echo "All evaluations completed."
+if [[ "${#failed_runs[@]}" -eq 0 ]]; then
+  echo "All evaluations completed."
+else
+  echo "Evaluations completed with failures:"
+  for item in "${failed_runs[@]}"; do
+    IFS='|' read -r mode benchmark log_file <<< "$item"
+    echo "  - mode=${mode}, benchmark=${benchmark}, log=${log_file}"
+  done
+  exit 1
+fi

@@ -299,31 +299,52 @@ def main():
     all_results = []
     for task in tasks:
         print(f"\nEvaluating: {task.metadata.name}")
-        result = mteb.evaluate(
-            model,
-            tasks=task,
-            cache=cache,
-            encode_kwargs={"batch_size": args.batch_size},
-        )
+        try:
+            result = mteb.evaluate(
+                model,
+                tasks=task,
+                cache=cache,
+                encode_kwargs={"batch_size": args.batch_size},
+                raise_error=False,
+            )
+        except Exception as e:
+            print(f"Task failed with uncaught exception: {e}")
+            result = None
         all_results.append(result)
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
 
     print("\n" + "=" * 60)
     print(f"RESULTS - {args.benchmark}")
     print("=" * 60)
     for task, result in zip(tasks, all_results):
-        # MTEB result API uses `task_names` (list) in recent versions.
-        task_name = getattr(result, "task_name", None)
-        if task_name is None:
-            task_names = getattr(result, "task_names", None)
-            if isinstance(task_names, list) and task_names:
-                task_name = task_names[0]
-            else:
-                task_name = task.metadata.name
+        if result is None:
+            print(f"\n{task.metadata.name}:")
+            print("  ERROR: task execution failed before returning a ModelResult")
+            continue
+
+        task_result = None
+        if hasattr(result, "task_results") and result.task_results:
+            task_result = result.task_results[0]
+
+        task_name = getattr(task_result, "task_name", None) or task.metadata.name
         print(f"\n{task_name}:")
-        for split, scores in result.scores.items():
+
+        if task_result is None:
+            exceptions = getattr(result, "exceptions", None) or []
+            if exceptions:
+                print(f"  ERROR: {exceptions[0].exception}")
+            else:
+                print("  No task result returned")
+            continue
+
+        for split, scores in task_result.scores.items():
             if isinstance(scores, list) and len(scores) > 0:
                 if isinstance(scores[0], dict) and "ndcg_at_5" in scores[0]:
                     print(f"  {split}: NDCG@5 = {scores[0]['ndcg_at_5']:.4f}")
+                elif isinstance(scores[0], dict) and "main_score" in scores[0]:
+                    print(f"  {split}: main_score = {scores[0]['main_score']:.4f}")
                 else:
                     print(f"  {split}: {scores}")
             else:

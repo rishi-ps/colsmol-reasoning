@@ -1,0 +1,11 @@
+task_name,none_ndcg_at_5,use_ndcg_at_5,delta_use_vs_none
+VidoreArxivQARetrieval,71.9840,57.1990,-14.7850
+VidoreDocVQARetrieval,55.7300,43.1370,-12.5930
+VidoreInfoVQARetrieval,82.4520,71.9240,-10.5280
+VidoreShiftProjectRetrieval,56.2360,40.6010,-15.6350
+VidoreSyntheticDocQAAIRetrieval,94.9110,82.5690,-12.3420
+VidoreSyntheticDocQAEnergyRetrieval,91.8410,79.3950,-12.4460
+VidoreSyntheticDocQAGovernmentReportsRetrieval,92.6090,82.8020,-9.8070
+VidoreSyntheticDocQAHealthcareIndustryRetrieval,95.1030,76.3910,-18.7120
+VidoreTabfquadRetrieval,62.0760,62.2600,0.1840
+VidoreTatdqaRetrieval,74.5080,59.6410,-14.8670

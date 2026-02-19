@@ -1,0 +1,5 @@
+task_name,none_ndcg_at_5,use_ndcg_at_5,delta_use_vs_none
+Vidore2BioMedicalLecturesRetrieval,21.3910,21.5420,0.1510
+Vidore2ESGReportsHLRetrieval,41.7550,39.1460,-2.6090
+Vidore2ESGReportsRetrieval,18.4700,25.5660,7.0960
+Vidore2EconomicsReportsRetrieval,11.7260,20.0500,8.3240
