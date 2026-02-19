@@ -1,0 +1,26 @@
+{
+  "created_at": "2026-02-11T16:47:33",
+  "run_name": "r2r_use_smoke12_bf16_seed42",
+  "seed": 42,
+  "config_path": "configs/r2r/base.yaml",
+  "traces_path": "data/traces/train_traces_full.json",
+  "limit": 12,
+  "trace_mode": "use",
+  "dtype": "bf16",
+  "training_config": {
+    "learning_rate": 5e-06,
+    "batch_size": 2,
+    "gradient_accumulation_steps": 8,
+    "num_epochs": 3,
+    "warmup_steps": 100,
+    "temperature": 0.1,
+    "separator": " [SEP] "
+  },
+  "retriever_config": {
+    "model_name": "vidore/colSmol-256M",
+    "use_lora": true,
+    "lora_rank": 32,
+    "lora_alpha": 32,
+    "enable_gradient_checkpointing": false
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "created_at": "2026-02-11T15:36:23",
+  "run_name": "r2r_offline_seed42_fastfail3",
+  "seed": 42,
+  "config_path": "configs/r2r/base.yaml",
+  "traces_path": "data/traces/train_traces_20k_offline_seed42.json",
+  "limit": 20,
+  "training_config": {
+    "learning_rate": 5e-06,
+    "batch_size": 2,
+    "gradient_accumulation_steps": 8,
+    "num_epochs": 3,
+    "warmup_steps": 100,
+    "separator": " [SEP] "
+  },
+  "retriever_config": {
+    "model_name": "vidore/colSmol-256M",
+    "use_lora": true,
+    "lora_rank": 32,
+    "lora_alpha": 32
+  }
+}

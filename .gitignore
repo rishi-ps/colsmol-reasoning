@@ -7,7 +7,7 @@ env/
 __pycache__/
 *.pyc
 *.pyo
-*.egg-info/
+# *.egg-info/
 dist/
 build/
 
@@ -25,7 +25,7 @@ Thumbs.db
 *.swo
 
 # Training outputs
-checkpoints/
+# checkpoints/
 wandb/
 outputs/
 
